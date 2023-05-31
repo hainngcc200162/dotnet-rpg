@@ -22,7 +22,7 @@ namespace dotnet_rpg.Controllers
         {
             return Ok(await _characterService.GettAllCharacters());
         }
-        
+
         [HttpGet("{id}")]
         public async Task<ActionResult<ServiceResponse<GetCharacterDto>>> GetSingle(int id)
         {
@@ -36,22 +36,18 @@ namespace dotnet_rpg.Controllers
             return Ok(await _characterService.AddCharacter(newCharacter));
         }
 
-        [HttpPut]
-        public async Task<ActionResult<ServiceResponse<List<GetCharacterDto>>>> UpdateCharacter(UpdateCharacterDto updatedCharacter)
+        [HttpPut("{id}")]
+        public async Task<ActionResult<ServiceResponse<GetCharacterDto>>> UpdateCharacter(int id, UpdateCharacterDto updatedCharacter)
         {
-            var response = await _characterService.UpdateCharacter(updatedCharacter);
-            if(response.Data is null)
-            {
-                return NotFound(response);
-            }
-            return Ok(await _characterService.UpdateCharacter(updatedCharacter));
+            return Ok(await _characterService.UpdateCharacter(id, updatedCharacter));
         }
+
 
         [HttpDelete("{id}")]
         public async Task<ActionResult<ServiceResponse<GetCharacterDto>>> DeletCharacter(int id)
         {
             var response = await _characterService.DeleteCharacter(id);
-            if(response.Data is null)
+            if (response.Data is null)
             {
                 return NotFound(response);
             }
