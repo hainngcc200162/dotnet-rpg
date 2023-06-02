@@ -3,6 +3,7 @@ global using dotnet_rpg.Services.CharacterService;
 global using dotnet_rpg.Dtos.Character;
 global using Microsoft.EntityFrameworkCore;
 global using dotnet_rpg.Data;
+global using AutoMapper;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,6 +17,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddAutoMapper(typeof(Program).Assembly);
 builder.Services.AddScoped<ICharacterService, CharacterService>();
+builder.Services.AddScoped<IAuthRepository, AuthRepository>();
 
 var app = builder.Build();
 
