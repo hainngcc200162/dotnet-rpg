@@ -1,22 +1,44 @@
 using System;
 using System.Collections.Generic;
+using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
+using Microsoft.IdentityModel.Tokens;
 
 namespace dotnet_rpg.Data
 {
     public class AuthRepository : IAuthRepository
     {
         private readonly DataContext _context;
+        private readonly IConfiguration _configuration;
 
-        public AuthRepository(DataContext context)
+        public AuthRepository(DataContext context, IConfiguration configuration)
         {
             _context = context;
+            _configuration = configuration;
         }
 
-        public Task<ServiceResponse<string>> Login(string username, string password)
+        public async Task<ServiceResponse<string>> Login(string username, string password)
         {
-            throw new NotImplementedException();
+            var response = new ServiceResponse<string>();
+            var user = await _context.Users
+                .FirstOrDefaultAsync(u => u.Username.ToLower().Equals(username.ToLower()));
+            if (user is null)
+            {
+                response.Success = false;
+                response.Message = "User not found.";
+            }
+            else if (!VerifyPasswordHash(password, user.PasswordHash, user.PasswordSalt))
+            {
+                response.Success = false;
+                response.Message = "Wrong password.";
+            }
+            else
+            {
+                response.Data = CreateToken(user);
+            }
+            return response;
         }
 
         public async Task<ServiceResponse<int>> Register(User user, string password)
@@ -25,17 +47,17 @@ namespace dotnet_rpg.Data
             if (await UserExists(user.Username))
             {
                 response.Success = false;
-                response.Message = "User Already Exists";
+                response.Message = "User already exists.";
                 return response;
             }
-            CreatPasswordHash(password, out byte[] passwordHass, out byte[] passwordSalt);
 
-            user.PasswordHash = passwordHass;
+            CreatePasswordHash(password, out byte[] passwordHash, out byte[] passwordSalt);
+
+            user.PasswordHash = passwordHash;
             user.PasswordSalt = passwordSalt;
 
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
-
             response.Data = user.Id;
             return response;
         }
@@ -49,7 +71,7 @@ namespace dotnet_rpg.Data
             return false;
         }
 
-        private void CreatPasswordHash(string password, out byte[] passwordHash, out byte[] passwordSalt)
+        private void CreatePasswordHash(string password, out byte[] passwordHash, out byte[] passwordSalt)
         {
             using (var hmac = new System.Security.Cryptography.HMACSHA512())
             {
@@ -58,57 +80,71 @@ namespace dotnet_rpg.Data
             }
         }
 
-        // public async Task<ServiceResponse<bool>> ChangePassword(string username, string oldPassword, string newPassword)
-        // {
-        //     var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
-        //     if (user == null)
-        //     {
-        //         return new ServiceResponse<bool> { Success = false, Message = "Invalid username." };
-        //     }
+        private bool VerifyPasswordHash(string password, byte[] passwordHash, byte[] passwordSalt)
+        {
+            using (var hmac = new System.Security.Cryptography.HMACSHA512(passwordSalt))
+            {
+                var computedHash = hmac.ComputeHash(System.Text.Encoding.UTF8.GetBytes(password));
+                return computedHash.SequenceEqual(passwordHash);
+            }
+        }
 
-        //     // Kiểm tra mật khẩu cũ
-        //     if (!VerifyPasswordHash(oldPassword, user.PasswordHash, user.PasswordSalt))
-        //     {
-        //         return new ServiceResponse<bool> { Success = false, Message = "Incorrect old password." };
-        //     }
+        private string CreateToken(User user)
+        {
+            var claims = new List<Claim> 
+            {
+                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                new Claim(ClaimTypes.Name, user.Username)
+            };
 
-        //     // Tạo mới salt và hash cho mật khẩu mới
-        //     CreatePasswordHash(newPassword, out byte[] newPasswordHash, out byte[] newPasswordSalt);
+            var appSettingsToken = _configuration.GetSection("AppSettings:Token").Value;
+            if(appSettingsToken is null)
+                throw new Exception("AppSettings Token is null !!");
+            
+            SymmetricSecurityKey key = new SymmetricSecurityKey(System.Text.Encoding.UTF8
+                .GetBytes(appSettingsToken));
 
-        //     // Cập nhật mật khẩu mới cho user
-        //     user.PasswordHash = newPasswordHash;
-        //     user.PasswordSalt = newPasswordSalt;
+            SigningCredentials creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256Signature);
+            
+            var tokenDescriptor = new SecurityTokenDescriptor
+            {
+                Subject = new ClaimsIdentity(claims),
+                Expires = DateTime.Now.AddDays(1),
+                SigningCredentials = creds
+            };
 
-        //     // Lưu thay đổi vào cơ sở dữ liệu
-        //     await _context.SaveChangesAsync();
+            JwtSecurityTokenHandler tokenHandler = new JwtSecurityTokenHandler();
+            SecurityToken token = tokenHandler.CreateToken(tokenDescriptor);
 
-        //     return new ServiceResponse<bool> { Success = true, Data = true, Message = "Password changed successfully." };
-        // }
+            return tokenHandler.WriteToken(token);
 
-        // private bool VerifyPasswordHash(string password, byte[] storedHash, byte[] storedSalt)
-        // {
-        //     using (var hmac = new System.Security.Cryptography.HMACSHA512(storedSalt))
-        //     {
-        //         var computedHash = hmac.ComputeHash(System.Text.Encoding.UTF8.GetBytes(password));
-        //         for (int i = 0; i < computedHash.Length; i++)
-        //         {
-        //             if (computedHash[i] != storedHash[i])
-        //             {
-        //                 return false;
-        //             }
-        //         }
-        //         return true;
-        //     }
-        // }
+            
+        }
+        public async Task<ServiceResponse<bool>> ChangePassword(string username, string oldPassword, string newPassword)
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
+            if (user == null)
+            {
+                return new ServiceResponse<bool> { Success = false, Message = "Invalid username." };
+            }
 
-        // private void CreatePasswordHash(string password, out byte[] passwordHash, out byte[] passwordSalt)
-        // {
-        //     using (var hmac = new System.Security.Cryptography.HMACSHA512())
-        //     {
-        //         passwordSalt = hmac.Key;
-        //         passwordHash = hmac.ComputeHash(System.Text.Encoding.UTF8.GetBytes(password));
-        //     }
-        // }
+            // Kiểm tra mật khẩu cũ
+            if (!VerifyPasswordHash(oldPassword, user.PasswordHash, user.PasswordSalt))
+            {
+                return new ServiceResponse<bool> { Success = false, Message = "Incorrect old password." };
+            }
 
+            // Tạo mới salt và hash cho mật khẩu mới
+            CreatePasswordHash(newPassword, out byte[] newPasswordHash, out byte[] newPasswordSalt);
+
+            // Cập nhật mật khẩu mới cho user
+            user.PasswordHash = newPasswordHash;
+            user.PasswordSalt = newPasswordSalt;
+
+            // Lưu thay đổi vào cơ sở dữ liệu
+            await _context.SaveChangesAsync();
+
+            return new ServiceResponse<bool> { Success = true, Data = true, Message = "Password changed successfully." };
+        }
     }
 }

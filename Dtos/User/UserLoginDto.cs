@@ -5,11 +5,9 @@ using System.Threading.Tasks;
 
 namespace dotnet_rpg.Dtos.User
 {
-    public class UserChangePasswordDto
+    public class UserLoginDto
     {
         public string Username { get; set; } = string.Empty;
-        public string OldPassword { get; set; } = string.Empty;
-        public string NewPassword { get; set; } = string.Empty;
-    
+        public string Password { get; set; } = string.Empty;
     }
 }

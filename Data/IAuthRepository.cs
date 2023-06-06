@@ -11,7 +11,7 @@ namespace dotnet_rpg.Data
          Task<ServiceResponse<int>> Register(User user, string password);
          Task<ServiceResponse<string>> Login(String username, string password);
          Task<bool> UserExists(string username);
-        //  Task<ServiceResponse<bool>> ChangePassword(string username, string oldPassword, string newPassword);
+         Task<ServiceResponse<bool>> ChangePassword(string username, string oldPassword, string newPassword);
 
     }
 }

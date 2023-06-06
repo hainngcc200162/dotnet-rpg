@@ -1,11 +1,15 @@
+using System.Security.Claims;
+using System.Net;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 
 namespace dotnet_rpg.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("api/[controller]")]
     public class CharacterController : ControllerBase
@@ -16,11 +20,10 @@ namespace dotnet_rpg.Controllers
         {
             _characterService = characterService;
         }
-
         [HttpGet("GetAll")]
         public async Task<ActionResult<ServiceResponse<List<GetCharacterDto>>>> Get()
         {
-            return Ok(await _characterService.GettAllCharacters());
+            return Ok(await _characterService.GetAllCharacters());
         }
 
         [HttpGet("{id}")]
@@ -36,10 +39,15 @@ namespace dotnet_rpg.Controllers
             return Ok(await _characterService.AddCharacter(newCharacter));
         }
 
-        [HttpPut("{id}")]
-        public async Task<ActionResult<ServiceResponse<GetCharacterDto>>> UpdateCharacter(int id, UpdateCharacterDto updatedCharacter)
+        [HttpPut]
+        public async Task<ActionResult<ServiceResponse<List<GetCharacterDto>>>> UpdateCharacter(UpdateCharacterDto updatedCharacter)
         {
-            return Ok(await _characterService.UpdateCharacter(id, updatedCharacter));
+            var response = await _characterService.UpdateCharacter(updatedCharacter);
+            if (response.Data is null)
+            {
+                return NotFound(response);
+            }
+            return Ok(response);
         }
 
 
